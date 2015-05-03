@@ -1,0 +1,369 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
+
+class CreateTokens{
+	
+	Integer sum = 0;
+	Integer countOfAllFiles;
+	
+	public ArrayList<String> createListofFiles (String directoryPath){
+		
+	
+	ArrayList<String> arrayListofFiles = new ArrayList<String>();	
+    
+	File getFiles = new File(directoryPath);    
+    File[] arrayOfFiles = getFiles.listFiles(); 	
+    
+    countOfAllFiles = arrayOfFiles.length;
+    		
+    for(int ix = 0; ix < arrayOfFiles.length; ix++){
+    	
+    	if(arrayOfFiles[ix].isFile()){
+    		arrayListofFiles.add(arrayOfFiles[ix].getName());
+    	}
+    	
+    }
+	
+	
+	return arrayListofFiles;
+	}//End of createListofFiles
+	
+	/*This method  is used to generate tokens from the documents present in Cranfield collection*/
+	public void GenerateTokens(String document, TreeMap tokenCollection){
+	
+		//First read the file
+		String fileName = "/people/cs/s/sanda/cs6322/Cranfield/" + document;
+		TreeMap <String,Integer> tokenCollection2 = tokenCollection;
+		HashMap <String,Integer> collectionOfTags = new HashMap<>();
+		
+		//Now, we will store all tags that we want to neglect from the collection
+		String[] tags = {"doc","docno","title","author","biblio","text"};
+		
+		for(int ir = 0; ir < tags.length; ir++){
+			collectionOfTags.put(tags[ir], 1);
+		}
+		
+		
+		
+		try{
+			BufferedReader bufferedReader = new BufferedReader(new FileReader(fileName));
+			StringBuilder stringBuilder = new StringBuilder();
+	        String line = bufferedReader.readLine();
+	        
+	        while (line != null) {
+	        	stringBuilder.append(line);
+            	stringBuilder.append(" ");
+                line = bufferedReader.readLine();
+	        	
+	        }// end of while
+	        
+	        bufferedReader.close();
+	        
+	        
+	        //Now process the string which we have got from the file
+	        String rawFileContents = stringBuilder.toString();
+	        //We will ignore any numeric character
+	        String fileContents = rawFileContents.replaceAll( "[^a-zA-Z0-9'.]", " " );
+	        String tokensWoSpaces = fileContents.replaceAll("\\s+", " ").trim();
+	        
+	      //Split the file contents on whitespace so that, we can each add a token
+	        String[] arrayofTokens = tokensWoSpaces.split(" ");
+	        
+	        //Now add these tokens to token collection
+	        Integer value;
+	        String tokenToAddinMap;
+	        
+	       
+	        
+	        for(int iy = 0; iy < arrayofTokens.length; iy++){
+	        	tokenToAddinMap = arrayofTokens[iy].toString().trim();
+	        	 tokenToAddinMap = tokenToAddinMap.toLowerCase();
+	        	 
+	        	//Remove any period, so U.S. will be added as US 
+	        	if(tokenToAddinMap.contains(".")){
+	        		tokenToAddinMap = tokenToAddinMap.replaceAll("\\.", "");
+	        	}
+	        	
+	        	//Remove any apostrophe, so university's will become university 
+	        	if(tokenToAddinMap.endsWith("'s"))
+	        		tokenToAddinMap = tokenToAddinMap.substring( 0, tokenToAddinMap.length()-2 );
+	        	
+	        	//Replace any apostrophe in special case. james will become james
+	        	tokenToAddinMap = tokenToAddinMap.replaceAll("'", "");
+	        	
+	        	if(tokenToAddinMap.length()>0){
+	        	
+	            //if we encounter any of the tags then we won't add it to the collection
+	        	if(collectionOfTags.containsKey(tokenToAddinMap.toLowerCase())){
+	        		continue;
+	        	}
+	        	else{
+	        		//If current token is already present in the collection, just increase its count by 1
+	        		if(tokenCollection2.containsKey(tokenToAddinMap.toLowerCase())){
+	        			
+	        			value = tokenCollection2.get(tokenToAddinMap) + 1;
+	        			tokenCollection2.remove(tokenToAddinMap);
+	        			tokenCollection2.put(tokenToAddinMap.toLowerCase(), value);
+	        		}
+	        		//If current token is not present in the collection, just add it
+	        		else{
+	        			tokenCollection2.put(tokenToAddinMap.toLowerCase(), 1);
+	        		}
+	        	}
+	        }
+	        
+	        }
+	        
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
+		
+	}// end of GenerateTokens function
+
+
+   /*This method is used to calculate total number of tokens present in the Cranfield collection*/
+   public void CalculateTotalTokens(TreeMap tokenCollection){
+	   TreeMap <String,Integer> tokenCollection2 = tokenCollection;
+	   
+	   for(Integer value : tokenCollection2.values()){
+	     	 sum = sum + value;
+		  }
+	   System.out.println("");
+	   System.out.println("Total number of tokens in the collection is - " + sum);
+   }
+
+   /*This method is used to calculate total number of tokens after stemming present in the Cranfield collection*/
+   public void CalculateTotalTokens2(TreeMap tokenCollection){
+	   TreeMap <String,Integer> tokenCollection2 = tokenCollection;
+	   Integer sum2 = 0;
+	   for(Integer value : tokenCollection2.values()){
+	     	 sum2 = sum2 + value;
+		  }
+	   System.out.println("");
+	   System.out.println("Total number of stems in the collection is - " + sum2);
+   }
+   
+   /*This method is used to calculate distinct tokens present in the Cranfield collection*/
+   public void DistinctTokens(TreeMap tokenCollection){
+	   TreeMap <String,Integer> tokenCollection2 = tokenCollection;
+	   Integer uniqueTokens = 0;
+	   uniqueTokens = tokenCollection2.size();
+	   System.out.println("");
+	   System.out.println("Total number of distinct tokens in the collection is - " + uniqueTokens);
+	   
+   }
+
+   /*This method is used to calculate number of tokens that occur only once in the Cranfield collection*/
+   public void FindSingularTokens(TreeMap tokenCollection){
+	   TreeMap <String,Integer> tokenCollection2 = tokenCollection; 
+	   
+	   
+	   Integer SingularTokens = 0;
+	   
+	   for(Map.Entry<String, Integer> entry : tokenCollection2.entrySet()){
+		    if( entry.getValue().equals(1) ){
+		    	SingularTokens = SingularTokens + 1;   
+		   }
+		   
+	   }
+	   System.out.println("");
+	   System.out.println("Number of tokens that occur only once is - " + SingularTokens);
+   }
+
+   /*This method is used to calculate top most 30 tokens present in the Cranfield collection*/
+   @SuppressWarnings({ "unchecked", "rawtypes" })
+   public void FindTopTokens(TreeMap tokenCollection){
+	   
+	   int index = 0;
+	   TreeMap <String,Integer> tokenCollection2 = new TreeMap();
+	   tokenCollection2 = tokenCollection;
+	   
+	   TreeMap<String,Integer> sortedTokens = new TreeMap(new TokenComparator(tokenCollection2));
+	  
+	   sortedTokens.putAll(tokenCollection);
+	  
+	  
+	   System.out.println("");
+	   System.out.println("Top 30 tokens with count");
+	   for(Map.Entry<String, Integer> entry : sortedTokens.entrySet()){
+	      	
+	    	 if(index <30){
+	      		System.out.println(entry.getKey() + "\t\t" + entry.getValue());
+	      		
+	      		index++;
+	      	}
+	    	 else{
+	    		 break;
+	    	 }
+	    	 
+	       }
+	    
+	    
+     }
+   
+   /*This method is used to calculate average tokens per document present in the Cranfield collection*/
+   public void FindAverageTokens(){
+	   System.out.println("");
+	   System.out.println("Average number of word tokens per document - " + (sum/countOfAllFiles));
+	   
+   }
+   
+   /*This method is used to calculate average stemmed tokens per document present in the Cranfield collection*/
+   public void FindAverageTokens(TreeMap<String,Integer> stemmingCollection){
+	   
+	   Integer totalSum = 0;
+	   
+	   for(Integer value : stemmingCollection.values()){
+		   totalSum = totalSum + value;
+	    	 
+		  }
+	   
+	   
+	   System.out.println("");
+	   System.out.println("Average number of  stemmed tokens per document - " + (totalSum/countOfAllFiles));
+		
+	   
+   }
+   
+   
+   /*This method is used to calculate tokens after stemming for each document present in the Cranfield collection*/
+   public TreeMap<String,Integer> stemCollection(TreeMap<String, Integer> tokenCollection){
+	      
+	      TreeMap<String,Integer>  tokenCollectionForStemming = tokenCollection;
+	      
+	      String tokenForStemming;
+	      char[] charArrayForStemming;
+	      Stemmer stemmer = new Stemmer();
+	      String stemmedToken;
+	      TreeMap <String,Integer> stemmingCollection = new TreeMap<String, Integer>();
+	      Integer value;
+	      Integer valueForTokenForStemming=0;
+	      
+	      //For every token, we will obtain the token after stemming
+	      for(Map.Entry<String, Integer> entry : tokenCollectionForStemming.entrySet()){
+	      
+	    	   tokenForStemming = entry.getKey();
+	    	   //Also obtain frequency of token so that we can have consistent results
+	    	   valueForTokenForStemming = entry.getValue();
+	    	   
+	    	   charArrayForStemming = tokenForStemming.toString().toCharArray();
+	    	   
+	    	   //Pass token as character array to the add function
+	    	   stemmer.add(charArrayForStemming,charArrayForStemming.length );
+	    	   //Convert it into to stem
+	     	   stemmer.stem();
+	     	   //Convert back it to the string
+	     	   stemmedToken = stemmer.toString();
+	     	  
+	     	   //Now, add the new token after stemming to treemap collection
+	    		  if(stemmingCollection.containsKey(stemmedToken)){
+		    		  value = stemmingCollection.get(stemmedToken) + valueForTokenForStemming;
+		    		  stemmingCollection.remove(stemmedToken);
+		    		  stemmingCollection.put(stemmedToken, value);
+		    	  }
+		    	  else{
+		    		  stemmingCollection.put(stemmedToken, valueForTokenForStemming);
+		    	  }
+	    		  
+	        }
+	      
+	      
+	    
+	      
+	      
+	 return  stemmingCollection;    
+   }
+   
+   
+     
+}
+
+public class Tokenizer {
+ @SuppressWarnings("unchecked")
+public static void main (String args[]){
+	 
+	 ArrayList<String>  arrayListofFiles = new ArrayList<>();
+	 
+	 CreateTokens createTokens = new CreateTokens();
+	 String directoryPath = "/people/cs/s/sanda/cs6322/Cranfield"; 
+	 
+	 arrayListofFiles = createTokens.createListofFiles(directoryPath);
+	 int count = 0;	 
+	 String document;
+	 
+	//Create a treemap to store each token and number of times token appears in Cranfield collection
+     TreeMap <String,Integer> tokenCollection = new TreeMap<String, Integer>();
+	 
+     long startTime = System.currentTimeMillis();
+          
+     //for(int it = 0; it < arrayListofFiles.size();it++)
+	 for(int it = 0; it < arrayListofFiles.size() ;it++){
+		 //For each document, create tokens
+		 document = arrayListofFiles.get(it);
+		 
+		 createTokens.GenerateTokens(document,tokenCollection);
+	 }
+	 
+	 
+	 long endTime = System.currentTimeMillis();
+
+	 double timeTaken = endTime-startTime/1000;
+	 
+	 
+	
+     
+	 System.out.println("");
+	 System.out.println("The program took " + timeTaken + " seconds for tokenization");
+     System.out.println("");
+     
+     //Calculate number of tokens in the map
+     createTokens.CalculateTotalTokens(tokenCollection);
+     
+     //Calculate distinct number of  tokens
+     createTokens.DistinctTokens(tokenCollection);
+     
+     //Calculate number of tokens that occur only once
+     createTokens.FindSingularTokens(tokenCollection);
+     
+     //Calculate 30 most frequent word tokens
+      createTokens.FindTopTokens(tokenCollection);
+      
+     //Calculate average number of word tokens per document
+      createTokens.FindAverageTokens();
+    
+      
+     System.out.println("");
+     System.out.println("*******************STEMMING***************************"); 
+      
+     //Stemming our token collection
+      TreeMap<String, Integer> collectionAfterStemming = new TreeMap<>();
+      collectionAfterStemming = createTokens.stemCollection(tokenCollection);
+    
+      //Calculate total tokens present after stemming
+      createTokens.CalculateTotalTokens2(collectionAfterStemming);
+      
+       //Calculate distinct number of tokens after stemming
+      createTokens.DistinctTokens(collectionAfterStemming);
+      
+      //Calculate number of tokens after stemming that occur only once
+      createTokens.FindSingularTokens(collectionAfterStemming);
+      
+      //Calculate 30 most frequent tokens after stemming
+      createTokens.FindTopTokens(collectionAfterStemming);
+      
+    //Calculate average number of tokens after stemming per document
+      createTokens.FindAverageTokens(collectionAfterStemming);
+      
+    
+      
+      
+     
+ }
+	
+}
