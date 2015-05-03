@@ -1,0 +1,30 @@
+import java.util.Map;
+import java.util.Comparator;
+import java.util.TreeMap;
+
+
+public class TokenComparator implements Comparator<Object> {
+ 
+  Map<String, Integer> map;
+ 
+  public TokenComparator(Map<String,Integer> map){
+    this.map = map;
+  }
+  public int compare(Object token1, Object token2){
+ 
+    Comparable<Integer> frequency1 = (Comparable<Integer>) map.get(token1);
+    Comparable<Integer> frequency2 = (Comparable) map.get(token2);
+    
+  
+    
+    if((Integer)frequency1 > (Integer)frequency2){
+		return -1;
+	}	
+   return 1;
+ 
+  }
+	
+	
+	
+	 
+}
