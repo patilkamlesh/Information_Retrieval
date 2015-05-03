@@ -1,0 +1,754 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.TreeMap;
+
+class Create_Tokens {
+
+	HashMap<String, Integer> collectionOfTagsAndStopWords = new HashMap<>();
+	String directoryPathForFindingHeadline = "";
+
+	/* This method is used to create list of files */
+	public ArrayList<String> createListofFiles(String directoryPath) {
+
+		ArrayList<String> arrayListofFiles = new ArrayList<String>();
+		directoryPathForFindingHeadline = directoryPath;
+		File getFiles = new File(directoryPath);
+
+		File[] arrayOfFiles = getFiles.listFiles();
+
+		for (int ix = 0; ix < arrayOfFiles.length; ix++) {
+
+			if (arrayOfFiles[ix].isFile()) {
+				arrayListofFiles.add(arrayOfFiles[ix].getName());
+			}
+
+		}
+
+		return arrayListofFiles;
+	}// End of createListofFiles
+
+	public void GenerateTokens(String fileName,
+			TreeMap<String, TreeMap<Integer, Integer>> tokenCollection,
+			TreeMap<String, Integer> allTokensInCollection) {
+
+		
+		// Now, we will store all tags and stop words that we want to neglect
+		// from the collection
+		String[] tagsAndStopWords = { "a", "all", "an", "and", "any", "are",
+				"as", "be", "been", "but", "by", "few", "for", "have", "he",
+				"her", "here", "him", "his", "how", "i", "in", "is", "it",
+				"its", "many", "me", "my", "none", "of", "on", "or", "our",
+				"she", "some", "the", "their", "them", "there", "they", "that",
+				"this", "us", "was", "what", "when", "where", "which", "who",
+				"why", "will", "with", "you", "your", "doc", "docno", "title",
+				"author", "biblio", "text" };
+
+		for (int ir = 0; ir < tagsAndStopWords.length; ir++) {
+			collectionOfTagsAndStopWords.put(tagsAndStopWords[ir], 1);
+		}
+
+		// Now process each and every token from the file
+		try {
+			BufferedReader bufferedReader = new BufferedReader(new FileReader(
+					fileName));
+			StringBuilder stringBuilder = new StringBuilder();
+			String line = bufferedReader.readLine();
+
+			while (line != null) {
+				stringBuilder.append(line);
+				stringBuilder.append(" ");
+				line = bufferedReader.readLine();
+
+			}// end of while
+
+			bufferedReader.close();
+
+			// Now process the string which we have got from the file
+			String rawFileContents = stringBuilder.toString();
+
+			String fileContents = rawFileContents.replaceAll("[^a-zA-Z0-9'.]",
+					" ");
+			String tokensWoSpaces = fileContents.replaceAll("\\s+", " ").trim();
+
+			// Split the file contents on whitespace so that, we can each add a
+			// token
+			String[] arrayofTokens = tokensWoSpaces.split(" ");
+
+			// Now add these tokens to token collection
+			
+			String tokenToAddinMap;
+			char[] charArrayForStemming;
+			String stemmedToken;
+
+			for (int iy = 0; iy < arrayofTokens.length; iy++) {
+				tokenToAddinMap = arrayofTokens[iy].toString().trim();
+				tokenToAddinMap = tokenToAddinMap.toLowerCase();
+
+				// Remove any period, so U.S. will be added as US
+				if (tokenToAddinMap.contains(".")) {
+					tokenToAddinMap = tokenToAddinMap.replaceAll("\\.", "");
+				}
+
+				// Remove any apostrophe, so university's will become university
+				if (tokenToAddinMap.endsWith("'s"))
+					tokenToAddinMap = tokenToAddinMap.substring(0,
+							tokenToAddinMap.length() - 2);
+
+				// Replace any apostrophe in special case. james' will become
+				// james
+				tokenToAddinMap = tokenToAddinMap.replaceAll("'", "");
+
+				if (tokenToAddinMap.length() > 0) {
+
+					// if we encounter any of the tags then we won't add it to
+					// the collection
+					if (collectionOfTagsAndStopWords
+							.containsKey(tokenToAddinMap.toLowerCase())) {
+						continue;
+					} else {
+
+						// Now Stem the token by applying Porter-Stemmer
+						// algorithm
+						Stemmer stemmer = new Stemmer();
+						charArrayForStemming = tokenToAddinMap.toString()
+								.toCharArray();
+						// Pass token as character array to the add function
+						stemmer.add(charArrayForStemming,
+								charArrayForStemming.length);
+						// Convert it into to stem
+						stemmer.stem();
+						// Convert back it to the string
+						stemmedToken = stemmer.toString();
+
+						TreeMap<Integer, Integer> listOfDocIds = new TreeMap<Integer, Integer>();
+
+						/*
+						 * This section is used to add a token to the separate
+						 * treemap which stores a token along with the number of
+						 * times it occurs in the Cranfield collection
+						 */
+						Integer value = 0;
+						if (allTokensInCollection.containsKey(stemmedToken
+								.toLowerCase())) {
+							value = allTokensInCollection.get(stemmedToken) + 1;
+							allTokensInCollection.remove(stemmedToken);
+							allTokensInCollection.put(stemmedToken, value);
+						} else {
+							allTokensInCollection.put(stemmedToken, 1);
+						}
+
+						/* End of adding tokens to complete collection */
+
+						// If current token is already present in the
+						// collection, just increase its count by 1
+						if (tokenCollection.containsKey(stemmedToken
+								.toLowerCase())) {
+
+							// First obtain the original list of DOC IDs
+							listOfDocIds = tokenCollection.get(stemmedToken);
+							Integer docId = Integer.parseInt(fileName
+									.substring(45, 49).toString());
+
+							if (listOfDocIds.containsKey(docId)) {
+								Integer tempCount = listOfDocIds.get(docId);
+								tempCount = tempCount + 1;
+								listOfDocIds.remove(docId);
+								listOfDocIds.put(docId, tempCount);
+							} else {
+								listOfDocIds.put(docId, 1);
+							}
+
+						}
+						// If current token is not present in the collection,
+						// just add it
+						else {
+							TreeMap<Integer, Integer> listOfDocIdsForNewToken = new TreeMap<Integer, Integer>();
+							// Extract only DOC ID from document, so
+							// cranfield0266 will give only 266
+							// listOfDocIdsForNewToken.add(
+							// Integer.parseInt(fileName.substring(45,
+							// 49).toString()) );
+							listOfDocIdsForNewToken.put(Integer
+									.parseInt(fileName.substring(45, 49)
+											.toString()), 1);
+							tokenCollection.put(stemmedToken.toLowerCase(),
+									listOfDocIdsForNewToken);
+						}
+					}
+				}
+
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		// End of processing each token from the file
+
+	}
+
+	/* This method is used to generate max_Tf and DocLen for each document */
+	public String ForEachDocument(String fileName,
+			TreeMap<String, Integer> tokenCollectionForEachDocument) {
+		HashMap<String, Integer> collectionOfTagsAndStopWords = new HashMap<>();
+		HashMap<String, Integer> collectionOfOnlyStopWords = new HashMap<>();
+
+		
+
+		// Now, we will store all tags and stop words that we want to neglect
+		// from the collection
+		String[] tags = { "doc", "docno", "title", "author", "biblio", "text" };
+		String[] stopWords = { "a", "all", "an", "and", "any", "are", "as",
+				"be", "been", "but", "by", "few", "for", "have", "he", "her",
+				"here", "him", "his", "how", "i", "in", "is", "it", "its",
+				"many", "me", "my", "none", "of", "on", "or", "our", "she",
+				"some", "the", "their", "them", "there", "they", "that",
+				"this", "us", "was", "what", "when", "where", "which", "who",
+				"why", "will", "with", "you", "your", "doc", "docno", "title",
+				"author", "biblio", "text" };
+
+		String max_Tf = "";
+		// Integer docLen = 0;
+
+		for (int ir = 0; ir < tags.length; ir++) {
+			collectionOfTagsAndStopWords.put(tags[ir], 1);
+		}
+
+		for (int ir = 0; ir < stopWords.length; ir++) {
+			collectionOfOnlyStopWords.put(stopWords[ir], 1);
+		}
+
+		//
+		Integer docLength = 0;
+		try {
+			BufferedReader bufferedReader = new BufferedReader(new FileReader(
+					fileName));
+			StringBuilder stringBuilder = new StringBuilder();
+			String line = bufferedReader.readLine();
+
+			while (line != null) {
+				stringBuilder.append(line);
+				stringBuilder.append(" ");
+				line = bufferedReader.readLine();
+
+			}// end of while
+
+			bufferedReader.close();
+
+			// Now process the string which we have got from the file
+			String rawFileContents = stringBuilder.toString();
+			// We will ignore any numeric character
+			String fileContents = rawFileContents.replaceAll("[^a-zA-Z0-9'.]",
+					" ");
+			String tokensWoSpaces = fileContents.replaceAll("\\s+", " ").trim();
+
+			// Split the file contents on whitespace so that, we can each add a
+			// token
+			String[] arrayofTokens = tokensWoSpaces.split(" ");
+
+			// Now add these tokens to token collection
+			Integer value;
+			String tokenToAddinMap;
+			char[] charArrayForStemming;
+			String stemmedToken;
+
+			for (int iy = 0; iy < arrayofTokens.length; iy++) {
+				tokenToAddinMap = arrayofTokens[iy].toString().trim();
+				tokenToAddinMap = tokenToAddinMap.toLowerCase();
+
+				// Remove any period, so U.S. will be added as US
+				if (tokenToAddinMap.contains(".")) {
+					tokenToAddinMap = tokenToAddinMap.replaceAll("\\.", "");
+				}
+
+				// Remove any apostrophe, so university's will become university
+				if (tokenToAddinMap.endsWith("'s"))
+					tokenToAddinMap = tokenToAddinMap.substring(0,
+							tokenToAddinMap.length() - 2);
+
+				// Replace any apostrophe in special case. james will become
+				// james
+				tokenToAddinMap = tokenToAddinMap.replaceAll("'", "");
+
+				if (tokenToAddinMap.length() > 0) {
+
+					// if we encounter any of the tags then we won't add it to
+					// the collection
+					if (collectionOfTagsAndStopWords
+							.containsKey(tokenToAddinMap.toLowerCase())) {
+						continue;
+					} else {
+
+						// Calculate doc length before we omit stop words
+						docLength++;
+
+						if (collectionOfOnlyStopWords
+								.containsKey(tokenToAddinMap.toLowerCase())) {
+							continue;
+						} else {
+							// Stemming
+							// Now Stem the token by applying Porter-Stemmer
+							// algorithm
+							Stemmer stemmer = new Stemmer();
+							charArrayForStemming = tokenToAddinMap.toString()
+									.toCharArray();
+							// Pass token as character array to the add function
+							stemmer.add(charArrayForStemming,
+									charArrayForStemming.length);
+							// Convert it into to stem
+							stemmer.stem();
+							// Convert back it to the string
+							stemmedToken = stemmer.toString();
+
+							// If current token is already present in the
+							// collection, just increase its count by 1
+							if (tokenCollectionForEachDocument
+									.containsKey(stemmedToken.toLowerCase())) {
+
+								value = tokenCollectionForEachDocument
+										.get(stemmedToken) + 1;
+								tokenCollectionForEachDocument
+										.remove(stemmedToken);
+								tokenCollectionForEachDocument.put(
+										stemmedToken.toLowerCase(), value);
+
+							}
+							// If current token is not present in the
+							// collection, just add it
+							else {
+								tokenCollectionForEachDocument.put(
+										stemmedToken.toLowerCase(), 1);
+							}
+						}
+
+					}
+				}
+
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		
+
+		// Will return max frequency from the treemap
+		max_Tf = FindTopTokens(tokenCollectionForEachDocument);
+		
+		
+		
+
+		return max_Tf + "~" + docLength;
+	}
+
+	/* This method is used to find stem having maximum frequency */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public String FindTopTokens(TreeMap tokenCollectionForEachDocument) {
+
+		TreeMap<String, Integer> tokenCollection2 = new TreeMap();
+		tokenCollection2 = tokenCollectionForEachDocument;
+
+		TreeMap<String, Integer> sortedTokens = new TreeMap(
+				new Custom_Comparator(tokenCollection2));
+
+		sortedTokens.putAll(tokenCollectionForEachDocument);
+
+		int index = 0;
+		Integer max_Tf = null;
+		String term = "";
+
+		for (Map.Entry<String, Integer> entry : sortedTokens.entrySet()) {
+
+			if (index < 1) {
+				max_Tf = entry.getValue();
+				term = entry.getKey();
+				index++;
+			} else {
+				break;
+			}
+
+		}
+		
+		return term + "@" + max_Tf;
+	}
+
+	
+
+	
+
+	/* This method is used to read the queries from the file */
+	public String[] ReadQueries(String queryFileName) {
+		String[] listOfQueries = null;
+
+		try {
+			BufferedReader bufferedReader = new BufferedReader(new FileReader(
+					queryFileName));
+			StringBuilder stringBuilder = new StringBuilder();
+			String line = bufferedReader.readLine();
+
+			while (line != null) {
+				stringBuilder.append(line);
+				stringBuilder.append(" ");
+				line = bufferedReader.readLine();
+
+			}// end of while
+
+			bufferedReader.close();
+			String allLines = stringBuilder.toString();
+			listOfQueries = allLines.split("Q[0-9:]+");
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return listOfQueries;
+	}
+
+	/*
+	 * This method is used to calculate the weights based on two weighing
+	 * functions
+	 */
+	public void FindWeights(String queryContents, int queryID,
+			TreeMap<String, TreeMap<Integer, Integer>> tokenCollection,
+			TreeMap<Integer, String> treeMapOfMaxTFAndDoclen,
+			Integer collectionSize, Integer avgDocLen,
+			TreeMap<Integer, TreeMap<String, Integer>> collectionOfDocWithTokens) {
+
+		String eachWordInQuery = "";
+		Integer docID = 0;
+
+		
+
+		TreeMap<Integer, TreeMap<Integer, Double>> weightsOfAllQueries_Weight1 = new TreeMap<Integer, TreeMap<Integer, Double>>();
+		TreeMap<Integer, TreeMap<Integer, Double>> weightsOfAllQueries_Weight2 = new TreeMap<Integer, TreeMap<Integer, Double>>();
+
+		TreeMap<Integer, Double> docIDWithWeight1 = new TreeMap<Integer, Double>();
+		TreeMap<Integer, Double> docIDWithWeight2 = new TreeMap<Integer, Double>();
+
+		double temp = 0;
+		double temp2 = 0;
+		double weight_1 = 0;
+		double weight_2 = 0;
+		Integer documentFrequency = 0;
+		Integer termFrequency = 0;
+		Integer max_TF = 0;
+		Integer docLen = 0;
+		TreeMap<Integer, Integer> postingsFile = new TreeMap<Integer, Integer>();
+
+		ArrayList<String> listOfStemmedQueryWords = new ArrayList<String>();
+		listOfStemmedQueryWords = IndexQuery(queryContents);
+
+		int tempcount = 0;
+
+		for (int ir = 0; ir < listOfStemmedQueryWords.size(); ir++) {
+
+			eachWordInQuery = listOfStemmedQueryWords.get(ir);
+
+			// Now get the postings file
+			if (tokenCollection.containsKey(eachWordInQuery)) {
+				postingsFile = tokenCollection.get(eachWordInQuery);
+
+				// Parameter 1
+				documentFrequency = postingsFile.size();
+
+				// For each document in the postings file, find the relevant
+				// parameters
+				for (Entry<Integer, Integer> entry : postingsFile.entrySet()) {
+
+					docID = entry.getKey();
+
+					tempcount++;
+
+					termFrequency = entry.getValue();
+					
+					
+
+					// Obtain max_tf
+					if (treeMapOfMaxTFAndDoclen.containsKey(docID)) {
+						String maxTFAndDocLen = "";
+						maxTFAndDocLen = treeMapOfMaxTFAndDoclen.get(docID);
+
+						// Parameter 3 and 4
+						max_TF = Integer.parseInt(maxTFAndDocLen.split("~")[0]
+								.split("@")[1]);
+						docLen = Integer.parseInt(maxTFAndDocLen.split("~")[1]);
+					}
+
+					weight_1 = (0.4 + 0.6 * Math.log(termFrequency + 0.5)
+							/ Math.log(termFrequency + 1.0))
+							* (Math.log(collectionSize / documentFrequency) / Math
+									.log(collectionSize));
+
+					double tempValue;
+					if (docIDWithWeight1.containsKey(docID)) {
+						tempValue = docIDWithWeight1.get(docID);
+						tempValue = tempValue + weight_1;
+						docIDWithWeight1.remove(docID);
+						docIDWithWeight1.put(docID, tempValue);
+
+					} else {
+						docIDWithWeight1.put(docID, weight_1);
+					}
+
+					weight_2 = (0.4 + 0.6
+							* (termFrequency / (termFrequency + 0.5 + 1.5 * (docLen / avgDocLen)))
+							* Math.log(collectionSize / documentFrequency)
+							/ Math.log(collectionSize));
+
+					double tempValue2;
+
+					if (docIDWithWeight2.containsKey(docID)) {
+						tempValue2 = docIDWithWeight2.get(docID);
+						tempValue2 = tempValue2 + weight_2;
+						docIDWithWeight2.remove(docID);
+						docIDWithWeight2.put(docID, tempValue2);
+
+					} else {
+						docIDWithWeight2.put(docID, weight_2);
+					}
+
+				}
+
+			}
+
+		}
+
+		weightsOfAllQueries_Weight1.put(queryID, docIDWithWeight1);
+		weightsOfAllQueries_Weight2.put(queryID, docIDWithWeight2);
+
+		// Now we want to display only top 10 results
+		TreeMap<Integer, LinkedHashMap<Integer, Double>> top10DocsForEachQueryWeight1 = new TreeMap<Integer, LinkedHashMap<Integer, Double>>();
+		TreeMap<Integer, LinkedHashMap<Integer, Double>> top10DocsForEachQueryWeight2 = new TreeMap<Integer, LinkedHashMap<Integer, Double>>();
+
+		top10DocsForEachQueryWeight1 = findTop10Results(weightsOfAllQueries_Weight1);
+		top10DocsForEachQueryWeight2 = findTop10Results(weightsOfAllQueries_Weight2);
+
+		// Display the output in the proper format
+		LinkedHashMap<Integer, String> DocIDWitheadline = new LinkedHashMap<Integer, String>();
+		DocIDWitheadline = FindHeadline(directoryPathForFindingHeadline);
+		System.out.println("");
+		System.out.println("");
+		System.out
+				.println("**********************************************************************");
+		System.out.println("Query: " + queryID);
+		System.out.println("Original query: " + queryContents);
+		System.out.println("Query after indexing: "
+				+ listOfStemmedQueryWords.toString());
+		System.out.println("");
+		System.out
+				.println("Top 10 most relevant documents with corresponding weights for weighing function 1 ");
+		System.out.println(String.format("%-5s %-10s %-25s %-10s", "Rank",
+				"Doc ID", "Score", "Headline"));
+
+		int rank = 0;
+		// Print the results
+		for (Entry<Integer, LinkedHashMap<Integer, Double>> entry : top10DocsForEachQueryWeight1
+				.entrySet()) {
+
+			for (Entry<Integer, Double> entry2 : entry.getValue().entrySet()) {
+				rank++;
+
+				System.out.println(String.format("%-5s %-10s %-25s %-10s",
+						rank, entry2.getKey(), entry2.getValue(), DocIDWitheadline.get(entry2.getKey())));
+				
+			}
+
+		}
+
+		// Print the results
+		// Display the output in the proper format
+		System.out.println("");
+		System.out.println("");
+		System.out
+				.println("**********************************************************************");
+		System.out.println("Query: " + queryID);
+		System.out.println("Original query: " + queryContents);
+		System.out.println("Query after indexing: "
+				+ listOfStemmedQueryWords.toString());
+		System.out.println("");
+		System.out
+				.println("Top 10 most relevant documents with corresponding weights for weighing function 2 ");
+		System.out.println(String.format("%-5s %-10s %-25s %-10s", "Rank",
+				"Doc ID", "Score", "Headline"));
+
+		int rank2 = 0;
+		for (Entry<Integer, LinkedHashMap<Integer, Double>> entry : top10DocsForEachQueryWeight2
+				.entrySet()) {
+
+			for (Entry<Integer, Double> entry2 : entry.getValue().entrySet()) {
+				rank2++;
+				System.out.println(String.format("%-5s %-10s %-25s %-10s",
+						rank2, entry2.getKey(), entry2.getValue(), DocIDWitheadline.get(entry2.getKey())));
+			}
+
+		}
+		System.out
+		.println("**********************************************************************");	
+		System.out.println("");
+			System.out.println("");
+			
+	}
+
+	/*
+	 * This method is used to obtain the filtered query after performing
+	 * operations like stem, removing stop words
+	 */
+	public ArrayList<String> IndexQuery(String query) {
+		String[] queryAsArray = query.split("\\s+");
+		String stemmedQueryWord = null;
+		ArrayList<String> listOfStemmedQueryWords = new ArrayList<String>();
+
+		for (int iy = 0; iy < queryAsArray.length; iy++) {
+			// Now Stem the token by applying Porter-Stemmer
+			// algorithm
+
+			// First check for stop word
+			if (!collectionOfTagsAndStopWords.containsKey(queryAsArray[iy]
+					.toString())) {
+				
+				Stemmer stemmer = new Stemmer();
+				String baseToken =queryAsArray[iy].toString().replaceAll("[^a-zA-Z0-9'.]"," ");
+					
+				String modifiedToken = baseToken.replaceAll("\\s+", " ").trim();
+				char[] charArrayForStemming = modifiedToken.toCharArray();
+				// Pass token as character array to the add function
+				stemmer.add(charArrayForStemming, charArrayForStemming.length);
+				// Convert it into to stem
+				stemmer.stem();
+				// Convert back it to the string
+				stemmedQueryWord = stemmer.toString();
+
+				listOfStemmedQueryWords.add(stemmedQueryWord);
+			}
+
+		}
+
+		return listOfStemmedQueryWords;
+
+	}
+
+	/* This method is used to obtain term frequency for a particular term */
+	public Integer findTermFrequency(TreeMap<Integer, Integer> postingsList) {
+		Integer termFrequency = 0;
+
+		for (Entry<Integer, Integer> entry : postingsList.entrySet()) {
+			termFrequency = termFrequency + entry.getValue();
+		}
+
+		return termFrequency;
+	}
+
+	/* This method is used to find top 10 documents matching each query */
+	public TreeMap<Integer, LinkedHashMap<Integer, Double>> findTop10Results(
+			TreeMap<Integer, TreeMap<Integer, Double>> weightsOfAllQueries_Weight) {
+		TreeMap<Integer, Double> listofAllDocuments = new TreeMap<Integer, Double>();
+		LinkedHashMap<Integer, Double> listofTop10DocumentsWithWeights = new LinkedHashMap<Integer, Double>();
+		Integer queryID = 0;
+
+		TreeMap<Integer, LinkedHashMap<Integer, Double>> top10DocsForEachQueryWeight = new TreeMap<Integer, LinkedHashMap<Integer, Double>>();
+
+		for (Entry<Integer, TreeMap<Integer, Double>> entry : weightsOfAllQueries_Weight
+				.entrySet()) {
+			queryID = entry.getKey();
+			listofAllDocuments = entry.getValue();
+
+			/* Now, find top 10 documents */
+			TreeMap<Integer, Double> tempTreeMap = new TreeMap<Integer, Double>();
+			tempTreeMap = listofAllDocuments;
+
+			TreeMap<Integer, Double> sortedTokens = new TreeMap<Integer, Double>(
+					new Custom_Comparator2(tempTreeMap));
+			sortedTokens.putAll(listofAllDocuments);
+
+			int index = 0;
+			for (Map.Entry<Integer, Double> entry2 : sortedTokens.entrySet()) {
+
+				if (index < 10) {
+					listofTop10DocumentsWithWeights.put(entry2.getKey(),
+							entry2.getValue());
+					index++;
+				} else {
+					break;
+				}
+
+			}
+
+			top10DocsForEachQueryWeight.put(queryID,
+					listofTop10DocumentsWithWeights);
+
+		}
+
+		return top10DocsForEachQueryWeight;
+	}
+
+	/* This method is used to find the headline of a document */
+	public LinkedHashMap<Integer, String> FindHeadline(String directoryPathForFindingHeadline) {
+		ArrayList<String> arrayListofFiles = new ArrayList<>();
+		arrayListofFiles = createListofFiles(directoryPathForFindingHeadline);
+
+		Integer fileID = 0;
+		String fileName = "";
+		LinkedHashMap<Integer, String> DocIDWitheadline = new LinkedHashMap<Integer, String>();
+		String titleOfDocument="";
+		
+		// For each of the document
+		for (int it = 0; it < arrayListofFiles.size(); it++) {
+			fileName = directoryPathForFindingHeadline
+					+ arrayListofFiles.get(it);
+			try {
+				BufferedReader bufferedReader = new BufferedReader(
+						new FileReader(fileName));
+				StringBuilder stringBuilder = new StringBuilder();
+				String line = bufferedReader.readLine();
+
+				while (line != null) {
+					stringBuilder.append(line);
+					stringBuilder.append(" ");
+					line = bufferedReader.readLine();
+
+				}// end of while
+
+				bufferedReader.close();
+				String allLines = stringBuilder.toString();
+
+				String[] allTokens = allLines.split("\\s+");
+				int pos1 = 0;
+				int pos2 = 0;
+
+				for (int ir = 0; ir < allTokens.length; ir++) {
+					if (allTokens[ir].equalsIgnoreCase("<title>")) {
+						pos1 = ir;
+						
+					}
+					if (allTokens[ir].equalsIgnoreCase("</title>")) {
+						pos2 = ir;
+						
+					}
+				}
+				
+				StringBuilder headLine = new StringBuilder();
+				for (int count = pos1 + 1; count < pos2 - 1; count++) {
+					headLine.append(allTokens[count]);
+					headLine.append(" ");
+				}
+				titleOfDocument = headLine.toString();
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
+			
+			DocIDWitheadline.put(Integer.parseInt(fileName.substring(45, 49).toString()), titleOfDocument);
+		}
+
+		return DocIDWitheadline;
+	}
+}//
