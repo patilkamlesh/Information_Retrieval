@@ -1,0 +1,716 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.ObjectOutputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
+
+import edu.stanford.nlp.ling.CoreAnnotations.LemmaAnnotation;
+import edu.stanford.nlp.ling.CoreAnnotations.SentencesAnnotation;
+import edu.stanford.nlp.ling.CoreAnnotations.TokensAnnotation;
+import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.pipeline.Annotation;
+import edu.stanford.nlp.pipeline.StanfordCoreNLP;
+import edu.stanford.nlp.util.CoreMap;
+
+class Lemmatization {
+	protected StanfordCoreNLP pipeline;
+
+	// Constructor
+	public Lemmatization() {
+		// Create StanfordCoreNLP object properties, with POS tagging
+		// (required for lemmatization), and lemmatization
+		Properties props;
+		props = new Properties();
+		props.put("annotators", "tokenize, ssplit, pos, lemma");
+
+		// StanfordCoreNLP loads a lot of models, so you probably
+		// only want to do this once per execution
+		this.pipeline = new StanfordCoreNLP(props);
+	}
+
+	public List<String> lemmatize(String documentText) {
+		List<String> lemmas = new LinkedList<String>();
+
+		// create an empty Annotation just with the given text
+		Annotation document = new Annotation(documentText);
+
+		// run all Annotators on this text
+		this.pipeline.annotate(document);
+
+		// Iterate over all of the sentences found
+		List<CoreMap> sentences = document.get(SentencesAnnotation.class);
+		for (CoreMap sentence : sentences) {
+			// Iterate over all tokens in a sentence
+			for (CoreLabel token : sentence.get(TokensAnnotation.class)) {
+				// Retrieve and add the lemma for each word into the list of
+				// lemmas
+				lemmas.add(token.get(LemmaAnnotation.class));
+			}
+		}
+
+		return lemmas;
+	}
+
+	/* This method is used to create list of files */
+	public ArrayList<String> createListofFiles(String directoryPath) {
+
+		ArrayList<String> arrayListofFiles = new ArrayList<String>();
+
+		File getFiles = new File(directoryPath);
+		File[] arrayOfFiles = getFiles.listFiles();
+
+		for (int ix = 0; ix < arrayOfFiles.length; ix++) {
+
+			if (arrayOfFiles[ix].isFile()) {
+				arrayListofFiles.add(arrayOfFiles[ix].getName());
+			}
+
+		}
+
+		return arrayListofFiles;
+	}// End of createListofFiles
+
+	/* This method is used to lemmatize each file */
+	public TreeMap<String, Integer> LemmatizeEachFile(String fileName,
+			TreeMap<String, TreeMap<Integer, Integer>> tokenCollection) {
+	
+
+		TreeMap<String, Integer> forEachDocument = new TreeMap<String, Integer>();
+
+		String rawFileContents = "";
+		try {
+			BufferedReader bufferedReader = new BufferedReader(new FileReader(
+					fileName));
+			StringBuilder stringBuilder = new StringBuilder();
+			String line = bufferedReader.readLine();
+
+			while (line != null) {
+				stringBuilder.append(line);
+				stringBuilder.append(" ");
+				line = bufferedReader.readLine();
+
+			}// end of while
+
+			bufferedReader.close();
+
+			// Now process the string which we have got from the file
+			rawFileContents = stringBuilder.toString();
+
+			// Now we will remove unnecessary characters from the file contents
+			String fileContentsWithStopWords = rawFileContents.replaceAll(
+					"[^a-zA-Z0-9'.]", " ");
+
+			String tokensWoSpacesWithStopWords = fileContentsWithStopWords
+					.replaceAll("\\s+", " ").trim();
+
+			// Now obtain document length so that later we can use it
+			Integer docLen = tokensWoSpacesWithStopWords.length();
+
+			// Now before we lemmatize the text, we will remove stop words as
+			// well as SGML tags
+			HashMap<String, Integer> collectionOfTagsAndStopWords = new HashMap<>();
+			String[] tagsAndStopWords = { "a", "all", "an", "and", "any",
+					"are", "as", "be", "been", "but", "by", "few", "for",
+					"have", "he", "her", "here", "him", "his", "how", "i",
+					"in", "is", "it", "its", "many", "me", "my", "none", "of",
+					"on", "or", "our", "she", "some", "the", "their", "them",
+					"there", "they", "that", "this", "us", "was", "what",
+					"when", "where", "which", "who", "why", "will", "with",
+					"you", "your", "doc", "docno", "title", "author", "biblio",
+					"text" };
+
+			for (int ir = 0; ir < tagsAndStopWords.length; ir++) {
+				collectionOfTagsAndStopWords.put(tagsAndStopWords[ir], 1);
+			}
+
+			// Now remove all stop words and tags
+			// Split the file contents on whitespace so that, we can each add a
+			// token
+			ArrayList<String> listOfTokensWoStopWords = new ArrayList<String>();
+			String currentToken = "";
+			String[] arrayofTokens = tokensWoSpacesWithStopWords.split(" ");
+
+			for (int iy = 0; iy < arrayofTokens.length; iy++) {
+
+				currentToken = arrayofTokens[iy].toString().trim();
+				currentToken = currentToken.toLowerCase();
+
+				// Remove any period, so U.S. will be added as US
+				if (currentToken.contains(".")) {
+					currentToken = currentToken.replaceAll("\\.", "");
+				}
+
+				// Remove any apostrophe, so university's will become university
+				if (currentToken.endsWith("'s"))
+					currentToken = currentToken.substring(0,
+							currentToken.length() - 2);
+
+				// Replace any apostrophe in special case. james' will become
+				// james
+				currentToken = currentToken.replaceAll("'", "");
+
+				if (currentToken.length() > 0) {
+					// if we encounter any of the tags then we won't add it to
+					// the collection
+					if (collectionOfTagsAndStopWords.containsKey(currentToken
+							.toLowerCase())) {
+						continue;
+					} else {
+						listOfTokensWoStopWords.add(currentToken.toLowerCase());
+					}
+
+				}
+
+			}
+
+			// Now we have an arraylist which contains all tokens in the file
+			// without stop words, now
+			// we will convert this arraylist to string so that we can lemmatize
+			// it
+			StringBuilder fileContentsWoStopWords = new StringBuilder();
+
+			for (String s : listOfTokensWoStopWords) {
+				fileContentsWoStopWords.append(s);
+				fileContentsWoStopWords.append(" ");
+			}
+
+			String finalListOfContents = fileContentsWoStopWords.toString();
+			// Now we have obtained the file contents in the string, so will
+			// lemmatize these contents
+			List<String> fileContentsAfterLemmatizing = null;
+
+			if (finalListOfContents.length() > 0)
+				fileContentsAfterLemmatizing = lemmatize(finalListOfContents);
+
+			// Now we have the list containing all lemmatized tokens
+			for (int id = 0; id < fileContentsAfterLemmatizing.size(); id++) {
+
+				String currentLemmeToken = fileContentsAfterLemmatizing.get(id);
+
+				/* This section is for each document */
+				if (forEachDocument.containsKey(currentLemmeToken)) {
+					Integer value = forEachDocument.get(currentLemmeToken);
+					Integer newValue = value + 1;
+					forEachDocument.remove(currentLemmeToken);
+					forEachDocument.put(currentLemmeToken, newValue);
+
+				} else {
+					forEachDocument.put(currentLemmeToken, 1);
+				}
+
+				/* End of "For each document */
+
+				// If current token is already present in the
+				// collection, just increase its count by 1
+				if (tokenCollection.containsKey(currentLemmeToken)) {
+					TreeMap<Integer, Integer> listOfDocIds = new TreeMap<Integer, Integer>();
+					// First obtain the original list of DOC IDs
+					listOfDocIds = tokenCollection.get(currentLemmeToken);
+					Integer docId = Integer.parseInt(fileName.substring(45, 49)
+							.toString());
+
+					if (listOfDocIds.containsKey(docId)) {
+						Integer tempCount = listOfDocIds.get(docId);
+						tempCount = tempCount + 1;
+						listOfDocIds.remove(docId);
+						listOfDocIds.put(docId, tempCount);
+					} else {
+						listOfDocIds.put(docId, 1);
+					}
+
+				}
+				// just add it
+				else {
+					TreeMap<Integer, Integer> listOfDocIdsForNewToken = new TreeMap<Integer, Integer>();
+					// Extract only DOC ID from document, so
+					// cranfield0266 will give only 266
+					// listOfDocIdsForNewToken.add(
+					// Integer.parseInt(fileName.substring(45,
+					// 49).toString()) );
+					listOfDocIdsForNewToken.put(Integer.parseInt(fileName
+							.substring(45, 49).toString()), 1);
+					tokenCollection.put(currentLemmeToken.toLowerCase(),
+							listOfDocIdsForNewToken);
+				}
+
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return forEachDocument;
+	}
+
+	/* This method is used to write the indices in the binary format */
+	public double WriteIndexToBinaryFile(Object tokenCollection, String fileName) {
+		double bytes = 0;
+		try {
+
+			File file = new File(fileName);
+			ObjectOutputStream out = new ObjectOutputStream(
+					new FileOutputStream(fileName));
+			out.writeObject(tokenCollection);
+			bytes = file.length();
+			out.flush();
+			out.close();
+
+		} catch (Exception e) {
+
+			e.printStackTrace();
+		}
+
+		return bytes;
+
+	}
+
+	/* This method is used to compress the index */
+	public TreeMap<String, HashMap<String, String>> Compression(
+			TreeMap<String, TreeMap<Integer, Integer>> tokenCollection) {
+
+		TreeMap<Integer, Integer> postingsList = new TreeMap<Integer, Integer>();
+
+		TreeMap<String, HashMap<String, String>> updatedTokenCollection = new TreeMap<String, HashMap<String, String>>();
+
+		for (Map.Entry<String, TreeMap<Integer, Integer>> entry : tokenCollection
+				.entrySet()) {
+			LinkedHashMap<String, String> postingsListWithGap = new LinkedHashMap<String, String>();
+			postingsList = entry.getValue();
+			String term = "";
+			term = entry.getKey();
+
+			int firstVal = 0;
+			int otherVal = 0;
+			int count = 0;
+			int temp = 0;
+			int frequency = 0;
+			String gammaCode = "";
+			String deltaCode = "";
+
+			for (Map.Entry<Integer, Integer> entry2 : postingsList.entrySet()) {
+				frequency = entry2.getValue();
+
+				if (count == 0) {
+					firstVal = entry2.getKey();
+
+					/*
+					 * Obtain delta codes for document Id and gamma code for
+					 * frequency information
+					 */
+					deltaCode = GenerateGammaCodes(firstVal);
+					gammaCode = GenerateDeltaCodes(frequency);
+					postingsListWithGap.put(deltaCode, gammaCode);
+				
+					otherVal = firstVal;
+					count = count + 1;
+
+				} else {
+					temp = otherVal + temp;
+					
+					otherVal = entry2.getKey() - temp;
+					
+					deltaCode = GenerateGammaCodes(otherVal);
+					gammaCode = GenerateDeltaCodes(frequency);
+					postingsListWithGap.put(deltaCode, gammaCode);
+					
+				}
+
+			}
+			updatedTokenCollection.put(term, postingsListWithGap);
+			
+
+		}
+	
+		return updatedTokenCollection;
+	}
+
+	public String GenerateGammaCodes(Integer frequency) {
+		@SuppressWarnings("static-access")
+		String binaryNumber = Integer.toBinaryString(frequency);
+		String unaryRepresentation = "";
+		String gammaCode;
+
+		String offset = binaryNumber.substring(1);
+		int lengthfOffset = offset.length();
+
+		for (int ix = 0; ix < lengthfOffset; ix++) {
+			unaryRepresentation = unaryRepresentation + 1;
+		}
+
+		unaryRepresentation = unaryRepresentation + '0';
+		gammaCode = unaryRepresentation + offset;
+
+		return gammaCode;
+	}
+
+	public String GenerateDeltaCodes(Integer gaps) {
+
+		String binaryNumber, gammaCode;
+		String deltaCode, offSet;
+		binaryNumber = Integer.toBinaryString(gaps);
+		offSet = binaryNumber.substring(1);
+		int lengthOfBinaryNumber = binaryNumber.length();
+
+		gammaCode = GenerateGammaCodes(lengthOfBinaryNumber);
+		deltaCode = gammaCode.concat(offSet);
+
+		return deltaCode;
+
+	}
+
+	public String FindDocLen(String fileName,HashMap<String, Integer> collectionOfTagsAndStopWords,HashMap<String, Integer> collectionOfOnlyStopWords){
+		
+		Integer docLen=0;
+		String rawFileContents = "";
+		String max_Tf ="";
+		try {
+			BufferedReader bufferedReader = new BufferedReader(new FileReader(
+					fileName));
+			StringBuilder stringBuilder = new StringBuilder();
+			String line = bufferedReader.readLine();
+
+			while (line != null) {
+				stringBuilder.append(line);
+				stringBuilder.append(" ");
+				line = bufferedReader.readLine();
+
+			}// end of while
+
+			bufferedReader.close();
+
+			// Now process the string which we have got from the file
+			rawFileContents = stringBuilder.toString();
+
+			// Now we will remove unnecessary characters from the file contents
+			String fileContentsWithStopWords = rawFileContents.replaceAll(
+					"[^a-zA-Z0-9'.]", " ");
+
+			String tokensWoSpacesWithStopWords = fileContentsWithStopWords
+					.replaceAll("\\s+", " ").trim();
+
+			// Now obtain document length so that later we can use it
+			
+			String[] arrayofTokens = tokensWoSpacesWithStopWords.split(" ");
+			String currentToken = "";
+			TreeMap <String,Integer> treeMapOfTokensForEachDocument = new TreeMap<String,Integer>();
+			
+			for (int iy = 0; iy < arrayofTokens.length; iy++) {
+
+				currentToken = arrayofTokens[iy].toString().trim();
+				currentToken = currentToken.toLowerCase();
+
+				// Remove any period, so U.S. will be added as US
+				if (currentToken.contains(".")) {
+					currentToken = currentToken.replaceAll("\\.", "");
+				}
+
+				// Remove any apostrophe, so university's will become university
+				if (currentToken.endsWith("'s"))
+					currentToken = currentToken.substring(0,
+							currentToken.length() - 2);
+
+				// Replace any apostrophe in special case. james' will become
+				// james
+				currentToken = currentToken.replaceAll("'", "");
+				char[]charArrayForStemming = null;
+				String stemmedToken = "";
+				if (currentToken.length() > 0) {
+					
+					if (collectionOfTagsAndStopWords.containsKey(currentToken.toLowerCase())) {
+						continue;
+						}
+					else{
+						docLen++;
+						if(collectionOfOnlyStopWords.containsKey(currentToken.toLowerCase())){
+							continue;
+						}
+						else{
+							Stemmer stemmer = new Stemmer();
+							charArrayForStemming = currentToken.toString()
+									.toCharArray();
+							// Pass token as character array to the add function
+							stemmer.add(charArrayForStemming,
+									charArrayForStemming.length);
+							// Convert it into to stem
+							stemmer.stem();
+							// Convert back it to the string
+							stemmedToken = stemmer.toString();
+							
+							if(treeMapOfTokensForEachDocument.containsKey(stemmedToken)){
+							Integer currentCount = treeMapOfTokensForEachDocument.get(stemmedToken);
+							Integer newCount = currentCount + 1;
+							treeMapOfTokensForEachDocument.remove(stemmedToken);
+							treeMapOfTokensForEachDocument.put(stemmedToken, newCount);
+							}
+							else{
+								treeMapOfTokensForEachDocument.put(stemmedToken, 1);
+							}
+							
+						}
+						
+						
+					}
+				}
+
+				
+				
+			}
+			
+			//Now find max_tf
+			
+			max_Tf = FindTopTokens(treeMapOfTokensForEachDocument);
+			
+		}
+		catch (Exception e){
+			e.printStackTrace();
+		}
+		
+		return max_Tf + "~" + docLen;
+		
+	}
+	
+	
+	
+	
+	/* This method is used to find stem having maximum frequency */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public String FindTopTokens(TreeMap tokenCollectionForEachDocument) {
+
+		TreeMap<String, Integer> tokenCollection2 = new TreeMap();
+		tokenCollection2 = tokenCollectionForEachDocument;
+
+		TreeMap<String, Integer> sortedTokens = new TreeMap(
+				new Comparator_Tokens(tokenCollection2));
+
+		sortedTokens.putAll(tokenCollectionForEachDocument);
+
+		int index = 0;
+		Integer max_Tf = null;
+		String term = "";
+
+		for (Map.Entry<String, Integer> entry : sortedTokens.entrySet()) {
+
+			if (index < 1) {
+				max_Tf = entry.getValue();
+				term = entry.getKey();
+				index++;
+			} else {
+				break;
+			}
+
+		}
+		
+		return term + "@" + max_Tf;
+	}
+	
+	
+	
+	/* This method is used to obtain inverted list for special terms */
+	public void PostingsForCustomTerms(
+			TreeMap<String, TreeMap<Integer, Integer>> tokenCollection) {
+
+		TreeMap<Integer, Integer> postingsListForCustomTerms = new TreeMap<Integer, Integer>();
+
+		String listOfCustomTerms[] = { "reynolds", "nasa", "prandtl", "flow","pressure", "boundary", "shock" };
+		char[] charArrayForStemming;
+		String stemmedToken;
+		String temp="";
+		String temp2="";
+		
+
+		Lemmatization lemmatization = new Lemmatization();
+		List<String>  lemmetizedToken;
+		
+		
+		
+		for (int ir = 0; ir < listOfCustomTerms.length; ir++) {
+			
+			
+			
+			stemmedToken = listOfCustomTerms[ir].toString();
+			
+			lemmetizedToken = lemmatization.lemmatize(stemmedToken);
+			temp= lemmetizedToken.toString().replaceAll("\\[", "").replaceAll("\\]","");;
+			
+      
+			
+			// Now obtain the postings list for the current term
+			if (tokenCollection.containsKey(temp.toLowerCase())) {
+				
+				postingsListForCustomTerms = tokenCollection.get(temp);
+				System.out.println("");
+				System.out.println("");
+				System.out.println("Document frequency for term " + temp
+						+ " is " + postingsListForCustomTerms.size());
+				System.out.println("Length of inverted list in bytes :"
+						+ WriteIndexToBinaryFile(postingsListForCustomTerms,"ForTerms"));
+				
+				Integer termFrequency = 0;
+				for(Map.Entry<Integer,Integer> entry :
+					postingsListForCustomTerms.entrySet()){
+					
+					termFrequency = termFrequency + entry.getValue();
+				}
+				
+				
+				System.out.println("Term frequency is - " + termFrequency);
+				
+				
+				
+
+			}
+		}
+
+	}
+
+	
+	
+}// End of Lemmatization
+
+public class Index_Version1 {
+
+	public static void main(String args[]) {
+		Lemmatization lemmatization = new Lemmatization();
+
+		String directoryPath = args[0];
+		
+		ArrayList<String> arrayListofFiles = new ArrayList<>();
+		// Create array list of files
+		arrayListofFiles = lemmatization.createListofFiles(directoryPath);
+		TreeMap<String, TreeMap<Integer, Integer>> tokenCollection = new TreeMap<String, TreeMap<Integer, Integer>>();
+
+		TreeMap<String, Integer> forEachDocument = new TreeMap<String, Integer>();
+
+		TreeMap<Integer, TreeMap<String, Integer>> linkedHashMapforEachDocument = new TreeMap<Integer, TreeMap<String, Integer>>();
+
+		String fileName;
+
+		long startTime = System.currentTimeMillis();
+
+		for (int it = 0; it < arrayListofFiles.size(); it++) {
+			// For each document/file, create tokens
+			fileName = directoryPath
+					+ arrayListofFiles.get(it);
+
+			forEachDocument = lemmatization.LemmatizeEachFile(fileName,
+					tokenCollection);
+			linkedHashMapforEachDocument.put(
+					Integer.parseInt(arrayListofFiles.get(it).toString()
+							.substring(9, 13)), forEachDocument);
+
+		}
+
+		long endTime = System.currentTimeMillis();
+
+		System.out.println("*******************************************Details for Index_Version1*******************************************");
+		System.out.println("");
+		System.out
+				.println("The program took "
+						+ (endTime - startTime)
+						+ " milli seconds for building uncompressed index of version 1");
+
+		
+		 /*for(Map.Entry<String, TreeMap<Integer,Integer>> entry :
+		 tokenCollection.entrySet()){ System.out.println("Term:  " +
+		 entry.getKey()); System.out.println("Postings List : " +
+		 entry.getValue());
+		 System.out.println("DF : " + entry.getValue().size() );
+		 }
+		 */
+		 
+
+		/* Write uncompressed index into binary file */
+		String fileNameForIndex = "Index_Version1.uncompress";
+		Double fileSize;
+		fileSize = lemmatization.WriteIndexToBinaryFile(tokenCollection,
+				fileNameForIndex);
+		System.out
+				.println("Size of the uncompressed index for version 1 in bytes - "
+						+ fileSize + " bytes");
+		System.out.println("");
+		System.out.println("Number of Inverted lists in version 1 : "
+				+ tokenCollection.size());
+		/* End of uncompressed index */
+
+		/* Index compression */
+		startTime = System.currentTimeMillis();
+		TreeMap<String, HashMap<String, String>> updatedTokenCollection = new TreeMap<String, HashMap<String, String>>();
+		updatedTokenCollection = lemmatization.Compression(tokenCollection);
+		endTime = System.currentTimeMillis();
+
+		System.out.println("");
+		System.out.println("The program took " + (endTime - startTime)
+				+ " milli seconds for building compressed index of version 1");
+
+		fileNameForIndex = "Index_Version1.compress";
+		fileSize = lemmatization.WriteIndexToBinaryFile(updatedTokenCollection,
+				fileNameForIndex);
+
+		System.out
+				.println("Size of the compressed index for version 1 in bytes - "
+						+ fileSize + " bytes");
+		/* End of Index Compression */
+
+		/* For each document */
+		
+		//Get the document length
+		TreeMap <Integer,String> docLenForAllFiles = new TreeMap<Integer,String>();
+		String docLenForEachFileWithMaxTf = "";
+		
+		
+		String[] tags = { "doc", "docno", "title", "author", "biblio", "text" };
+		HashMap<String, Integer> collectionOfTagsAndStopWords = new HashMap<>();
+		HashMap<String, Integer> collectionOfOnlyStopWords = new HashMap<>();
+		
+		for (int ir = 0; ir < tags.length; ir++) {
+			collectionOfTagsAndStopWords.put(tags[ir], 1);
+		}
+		
+		
+		String[] stopWords = { "a", "all", "an", "and", "any", "are", "as",
+				"be", "been", "but", "by", "few", "for", "have", "he", "her",
+				"here", "him", "his", "how", "i", "in", "is", "it", "its",
+				"many", "me", "my", "none", "of", "on", "or", "our", "she",
+				"some", "the", "their", "them", "there", "they", "that",
+				"this", "us", "was", "what", "when", "where", "which", "who",
+				"why", "will", "with", "you", "your", "doc", "docno", "title",
+				"author", "biblio", "text" };
+		
+		for (int ir = 0; ir < stopWords.length; ir++) {
+			collectionOfOnlyStopWords.put(stopWords[ir], 1);
+		}
+		
+		
+		
+		for (int it = 0; it < arrayListofFiles.size(); it++) {
+			fileName = directoryPath
+					+ arrayListofFiles.get(it);
+			docLenForEachFileWithMaxTf = lemmatization.FindDocLen(fileName,collectionOfTagsAndStopWords,collectionOfOnlyStopWords);
+			docLenForAllFiles.put(Integer.parseInt(fileName.substring(45, 49)), docLenForEachFileWithMaxTf);
+		}
+		
+		
+		
+		//Get the max_tf and Doclen
+		System.out.println("");
+		//Write this data to binary file
+		String fileNameForMaxTf = "MaxTfAndDoclen_Version1";
+		lemmatization.WriteIndexToBinaryFile(docLenForAllFiles, fileNameForMaxTf);
+		System.out.println("File MaxTfAndDoclen_Version1 contains following information : " + "\n" + "For each document, the frequency of the most frequent stem in that document (max_tf)," + "\n" + "and the total number of word occurrences in the document (doclen). ");
+
+		/* End of for each document */
+		
+		
+		/* For specific terms mentioned in the problem statement */
+		lemmatization.PostingsForCustomTerms(tokenCollection);
+
+	}
+}
